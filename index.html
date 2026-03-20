@@ -241,11 +241,11 @@ const GY=VH-32,CHUNK=480;
 const JUMP_V=-9.5,DJUMP_V=-8.5,GRAV_UP=0.44,GRAV_DN=0.64;
 
 function getSpd(sec){
-  if(sec<10)return 1.8;
-  if(sec<30)return 1.8+(sec-10)/20*1.2;
-  if(sec<60)return 3.0+(sec-30)/30*1.5;
-  if(sec<120)return 4.5+(sec-60)/60*1.5;
-  return Math.min(8.0,6.0+(sec-120)/120);
+  if(sec<10)return 1.4; // Reduced from 1.8
+  if(sec<30)return 1.4+(sec-10)/20*1.0;
+  if(sec<60)return 2.4+(sec-30)/30*1.2;
+  if(sec<120)return 3.6+(sec-60)/60*1.4;
+  return Math.min(6.5,5.0+(sec-120)/120);
 }
 
 // ── Cached DOM references (set once at start, not on every frame) ──
