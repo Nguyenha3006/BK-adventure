@@ -199,37 +199,25 @@ const QABANK=[
   {q:"Nhiệt lượng Q = ?",o:["mcΔT","mΔT","cΔT","mc/ΔT"],a:0,c:"VL"},
   {q:"Định luật Boyle: PV=?",o:["hằng số","nRT","0","PₒVₒ/T"],a:0,c:"VL"},
 ];
-// ── Fisher-Yates Shuffle ──
-// Produces a uniformly random permutation in O(n).
-// Unlike [].sort(() => Math.random() - .5) which is biased and O(n log n),
-// Fisher-Yates guarantees each permutation is equally likely.
 function fisherYates(arr){
   const a=[...arr];
   for(let i=a.length-1;i>0;i--){
     const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]]; // ES6 destructure swap — no temp variable needed
+    [a[i],a[j]]=[a[j],a[i]];
   }
   return a;
 }
 
-// ── QA Deck system ──
-// On each new game (or when deck empties) we shuffle the full QABANK once
-// with Fisher-Yates, then pop from the end — O(1) per pick, zero collisions,
-// guaranteed full coverage before any question repeats.
 let qaDeck=[];
 function reshuffleDeck(){
-  // Build index array [0,1,...,n-1] and shuffle it.
-  // Storing indices keeps the deck small (integers vs. full objects).
   const indices=QABANK.map((_,i)=>i);
   qaDeck=fisherYates(indices);
 }
 
 function pickQA(){
-  // Refill deck when empty — new full shuffle, no repeats within a pass
   if(qaDeck.length===0) reshuffleDeck();
-  const idx=qaDeck.pop();          // O(1): pop from end of shuffled deck
+  const idx=qaDeck.pop();
   const r=QABANK[idx];
-  // Shuffle the 4 answer options with Fisher-Yates (not biased sort)
   const ord=fisherYates([0,1,2,3]);
   return{q:r.q,opts:ord.map(i=>r.o[i]),ans:ord.indexOf(r.a),cat:r.c};
 }
@@ -240,16 +228,15 @@ function pickQA(){
 const GY=VH-32,CHUNK=480;
 const JUMP_V=-9.5,DJUMP_V=-8.5,GRAV_UP=0.44,GRAV_DN=0.64;
 
+// ── ADJUSTED SPEED LOGIC ──
 function getSpd(sec){
-  if(sec<10)return 1.8;
-  if(sec<30)return 1.8+(sec-10)/20*1.2;
-  if(sec<60)return 3.0+(sec-30)/30*1.5;
-  if(sec<120)return 4.5+(sec-60)/60*1.5;
-  return Math.min(8.0,6.0+(sec-120)/120);
+  if(sec<10)return 1.4; // Reduced from 1.8
+  if(sec<30)return 1.4+(sec-10)/20*1.0;
+  if(sec<60)return 2.4+(sec-30)/30*1.2;
+  if(sec<120)return 3.6+(sec-60)/60*1.4;
+  return Math.min(6.5,5.0+(sec-120)/120); // Cap at 6.5 instead of 8.0
 }
 
-// ── Cached DOM references (set once at start, not on every frame) ──
-// getElementById inside a 60fps loop is measurably slower than a cached ref.
 const $={
   hsc:null,hdi:null,hwo:null,hbk:null,hhp:null,hsp:null,
   spdbar:null,notif:null,banner:null,qa:null,qaq:null,qacat:null,
@@ -259,23 +246,13 @@ const $={
 function cacheDOM(){
   for(const k in $) $[k]=document.getElementById(k==='banner'?'scene-banner':k);
 }
-// Enemy speed also scales with gameSec
 function getEnemySpd(sec){
-  const base=0.5+Math.min(sec/60,1)*1.5; // 0.5 → 2.0
+  const base=0.4+Math.min(sec/60,1)*1.2; // Adjusted enemy move speed
   return base;
 }
 
-// ══════════════════════════════════════
-// ENEMY TYPES
-// gt1 = Giải Tích I (blue book, slow waddle)
-// gt2 = Giải Tích II (dark blue, medium)
-// gt3 = Giải Tích III (white book, flying)
-// vl  = Vật Lý Đại Cương (light blue, jumpy)
-// dl  = Deadline boss (original, fast)
-// ══════════════════════════════════════
 const ENEMY_TYPES=['gt1','gt2','gt3','vl','dl'];
 function pickEnemyType(hard,sec){
-  // early game mostly gt1, harder game more variety
   const roll=Math.random();
   if(sec<20) return 'gt1';
   if(sec<40) return roll<.6?'gt1':'gt2';
@@ -328,7 +305,6 @@ function makeChunk(ci){
     const spd=(espd+Math.random()*.5)*(Math.random()>.5?1:-1);
     ch.enemies.push({x:ex,y:ey,w:26,h:26,vx:spd,
       type:etype,fly,sinBase:ey,alive:true,fr:0,ft:0,
-      // vl enemies jump periodically
       jumpTimer:Math.floor(Math.random()*60)+30,
       vy:0});
   }
@@ -348,7 +324,7 @@ function makeChunk(ci){
 // ══════════════════════════════════════
 function initGame(){
   G={x:40,y:GY-32,w:14,h:32,vy:0,onGnd:false,jumps:0,coyote:0,
-     hp:3,score:0,books:0,dist:0,inv:false,invT:0,dead:false,fr:0,ft:0};
+      hp:3,score:0,books:0,dist:0,inv:false,invT:0,dead:false,fr:0,ft:0};
   cam=0;tick=0;cGen=0;chunks=[];parts=[];qaActive=false;
   wantsJump=false;reshuffleDeck();gameSec=0;lastTs=0;lastSceneIdx=0;
   for(let i=0;i<6;i++)chunks.push(makeChunk(cGen++));
@@ -388,7 +364,7 @@ function updateHUD(){
   $.hbk.textContent=G.books||0;
   $.hhp.textContent='❤'.repeat(Math.max(0,G.hp||0));
   $.hsp.textContent='×'+spd.toFixed(1);
-  const pct=Math.min(1,Math.max(.04,(spd-1.8)/(8-1.8)));
+  const pct=Math.min(1,Math.max(.04,(spd-1.4)/(6.5-1.4)));
   $.spdbar.style.transform='scaleX('+pct+')';
 }
 function dmg(){
@@ -431,7 +407,7 @@ function update(ts){
   const si=getSceneIdx(G.dist);
   if(si!==lastSceneIdx){lastSceneIdx=si;showBanner(SCENES[si]);}
 
-  const spd=getSpd(gameSec); // compute once, reuse below
+  const spd=getSpd(gameSec);
   G.x+=spd;G.dist=Math.max(G.dist,(G.x/16)|0);
 
   if(wantsJump){
@@ -449,27 +425,22 @@ function update(ts){
 
   cam=Math.max(0,G.x-VW*.32);
   while(cGen*CHUNK<cam+VW+CHUNK*2)chunks.push(makeChunk(cGen++));
-  // In-place prune: avoids allocating a new array every frame (unlike .filter)
   const camLeft=cam-CHUNK;
   for(let ci=chunks.length-1;ci>=0;ci--){if(chunks[ci].x+CHUNK<camLeft)chunks.splice(ci,1);}
 
-  // Cache player AABB once — avoids recomputing G.x+G.w dozens of times per frame
   const px1=G.x, px2=G.x+G.w, py2=G.y+G.h;
 
   for(const ch of chunks){
-    // ── Ground ──
     for(const g of ch.grounds){
       if(px2>g.x&&px1<g.x+g.w&&G.vy>=0&&py2>g.y&&py2-G.vy<=g.y+10){
         G.y=g.y-G.h;G.vy=0;G.onGnd=true;G.jumps=0;
       }
     }
-    // ── Platforms ──
     for(const p of ch.platfs){
       if(px2>p.x&&px1<p.x+p.w&&G.vy>=0&&py2>p.y&&py2-G.vy<=p.y+10&&G.y<p.y){
         G.y=p.y-G.h;G.vy=0;G.onGnd=true;G.jumps=0;
       }
     }
-    // ── Q-Blocks ──
     for(const qb of ch.qbs){
       if(!qb.hit&&px2>qb.x&&px1<qb.x+qb.w&&G.vy<0&&G.y<qb.y+qb.h&&G.y>qb.y+qb.h-14){
         qb.hit=true;qb.bump=8;G.vy=Math.max(G.vy,2.5);puff(qb.x+7,qb.y,'#ffd700');
@@ -477,7 +448,6 @@ function update(ts){
       }
       if(qb.bump>0)qb.bump=Math.max(0,qb.bump-1.5);
     }
-    // ── Enemies ──
     for(const e of ch.enemies){
       if(!e.alive)continue;
       e.x+=e.vx;
@@ -490,12 +460,10 @@ function update(ts){
         if(e.y>=e.sinBase){e.y=e.sinBase;e.vy=0;}
       }
       e.ft++;if(e.ft>7){e.fr^=1;e.ft=0;}
-      // Reverse at ground-segment edges
       for(const g of ch.grounds){
         if(e.x+e.w>g.x+g.w&&e.vx>0)e.vx=-e.vx;
         else if(e.x<g.x&&e.vx<0)e.vx=-e.vx;
       }
-      // Player collision
       if(!G.inv&&px2-4>e.x&&px1+4<e.x+e.w&&py2>e.y&&G.y<e.y+e.h){
         if(G.vy>1&&py2<e.y+e.h*.55){
           e.alive=false;G.vy=-8.5;
@@ -505,13 +473,11 @@ function update(ts){
         } else dmg();
       }
     }
-    // ── Books ──
     for(const b of ch.books){
       if(!b.done&&px2>b.x&&px1<b.x+14&&py2>b.y&&G.y<b.y+20){
         b.done=true;G.books++;G.score+=150;puff(b.x+7,b.y,'#ffd700');showN('📚 +150');updateHUD();
       }
     }
-    // ── Coins ──
     for(const co of ch.coins){
       co.bob=Math.sin(tick*.18+co.x*.05)*2.5;
       if(!co.done&&px2>co.x&&px1<co.x+10&&py2>co.y&&G.y<co.y+12){
@@ -522,16 +488,14 @@ function update(ts){
 
   if(wasGnd&&!G.onGnd&&G.vy>0)G.coyote=6;
 
-  // Pit recovery
   if(G.y>VH+80){
     dmg();G.vy=0;G.jumps=0;G.coyote=0;G.y=GY-G.h;
     outer:for(const ch of chunks)
       for(const g of ch.grounds)
         if(G.x+G.w>g.x&&G.x<g.x+g.w){G.y=g.y-G.h;break outer;}
-    G.x+=spd*10; // reuse already-computed spd
+    G.x+=spd*10;
   }
 
-  // Particles — iterate backwards so splice doesn't skip elements
   for(let i=parts.length-1;i>=0;i--){
     const p=parts[i];p.x+=p.vx;p.y+=p.vy;p.vy+=.14;p.life--;
     if(p.life<=0)parts.splice(i,1);
@@ -539,137 +503,92 @@ function update(ts){
   updateHUD();
 }
 
-// Const lookup table: Object literal created once, avoids function call + branch per stomp
 const SCORE_FOR_TYPE={gt1:0,gt2:50,gt3:100,vl:100,dl:150};
 
 // ══════════════════════════════════════
-// DRAW — ENEMIES (pixel-art textbooks)
+// DRAW — ENEMIES
 // ══════════════════════════════════════
-
-// GT1: Giải Tích I — blue diagonal-stripe book with angry face
 function drawGT1(e){
   const x=e.x|0,y=e.y|0,w=e.w,h=e.h;
   const bob=Math.sin(tick*.12+e.x*.01)*2;
   const lf=e.fr===0;
-  // Feet
   ctx.fillStyle='#1a1a2a';
   ctx.fillRect(x+(lf?2:6),y+h-5,7,5);ctx.fillRect(x+(lf?w-9:w-5),y+h-5,7,5);
-  // Book body — blue gradient-like blocks
   ctx.fillStyle='#1a4a8a';ctx.fillRect(x,y+bob,w,h-5);
-  // Diagonal stripe pattern (like GT1 cover)
   ctx.fillStyle='#2a6ab0';
-  for(let i=0;i<5;i++){
-    ctx.fillRect(x,y+bob+i*5,w,3);
-  }
-  ctx.fillStyle='#0f2a55';ctx.fillRect(x,y+bob,w,4); // top edge
-  ctx.fillRect(x,y+bob,3,h-5); // spine
-  // White text on cover
+  for(let i=0;i<5;i++){ctx.fillRect(x,y+bob+i*5,w,3);}
+  ctx.fillStyle='#0f2a55';ctx.fillRect(x,y+bob,w,4);
+  ctx.fillRect(x,y+bob,3,h-5);
   ctx.fillStyle='#fff';ctx.font='bold 5px monospace';ctx.textAlign='center';
-  ctx.fillText('BÀI',x+w/2,y+bob+9);
-  ctx.fillText('GT',x+w/2,y+bob+15);
-  ctx.fillText('I',x+w/2,y+bob+21);
+  ctx.fillText('BÀI',x+w/2,y+bob+9);ctx.fillText('GT',x+w/2,y+bob+15);ctx.fillText('I',x+w/2,y+bob+21);
   ctx.textAlign='left';
-  // Angry face
   ctx.fillStyle='#fff';ctx.fillRect(x+4,y+bob+h*.45,7,6);ctx.fillRect(x+w-11,y+bob+h*.45,7,6);
   ctx.fillStyle='#000';ctx.fillRect(x+5,y+bob+h*.47,3,4);ctx.fillRect(x+w-10,y+bob+h*.47,3,4);
-  // angry brows
   ctx.fillStyle='#000';
   ctx.save();ctx.translate(x+5,y+bob+h*.42);ctx.rotate(-.35);ctx.fillRect(0,0,7,2);ctx.restore();
   ctx.save();ctx.translate(x+w-5,y+bob+h*.42);ctx.rotate(.35);ctx.fillRect(-7,0,7,2);ctx.restore();
-  // mouth
   ctx.fillStyle='#c8001e';ctx.fillRect(x+6,y+bob+h*.58,w-12,3);
 }
 
-// GT2: Giải Tích II — dark blue book with 3D cone graphic
 function drawGT2(e){
   const x=e.x|0,y=e.y|0,w=e.w,h=e.h;
   const bob=Math.sin(tick*.1+e.x*.01)*2;
   const lf=e.fr===0;
   ctx.fillStyle='#0a0a1a';
   ctx.fillRect(x+(lf?2:6),y+h-5,7,5);ctx.fillRect(x+(lf?w-9:w-5),y+h-5,7,5);
-  // Book body — very dark blue
   ctx.fillStyle='#060a1e';ctx.fillRect(x,y+bob,w,h-5);
   ctx.fillStyle='#0f1a3a';ctx.fillRect(x+3,y+bob,w-3,h-5);
-  // Top border stripe
   ctx.fillStyle='#2244aa';ctx.fillRect(x,y+bob,w,4);
-  // Spine
   ctx.fillStyle='#040810';ctx.fillRect(x,y+bob,3,h-5);
-  // Title text
   ctx.fillStyle='#ffd700';ctx.font='bold 5px monospace';ctx.textAlign='center';
   ctx.fillText('GT',x+w/2,y+bob+10);ctx.fillText('II',x+w/2,y+bob+16);ctx.textAlign='left';
-  // 3D cone shape on cover (pixel representation)
-  ctx.fillStyle='#8888cc';ctx.fillRect(x+5,y+bob+20,w-10,8);  // cone top ellipse
+  ctx.fillStyle='#8888cc';ctx.fillRect(x+5,y+bob+20,w-10,8);
   ctx.fillStyle='#5555aa';
   ctx.beginPath();ctx.moveTo(x+5,y+bob+24);ctx.lineTo(x+w-5,y+bob+24);ctx.lineTo(x+w/2,y+bob+h-8);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#aa44cc';// purple slice
+  ctx.fillStyle='#aa44cc';
   ctx.beginPath();ctx.moveTo(x+w/2,y+bob+22);ctx.lineTo(x+w-5,y+bob+24);ctx.lineTo(x+w/2,y+bob+h-8);ctx.closePath();ctx.fill();
-  // Face
   ctx.fillStyle='#fff';ctx.fillRect(x+3,y+bob+8,5,5);ctx.fillRect(x+w-8,y+bob+8,5,5);
   ctx.fillStyle='#000';ctx.fillRect(x+4,y+bob+9,3,3);ctx.fillRect(x+w-7,y+bob+9,3,3);
   ctx.fillStyle='#c8001e';ctx.fillRect(x+6,y+bob+15,w-12,2);
 }
 
-// GT3: Giải Tích III — white/grey book, flying, with rabbit+dog pixel
 function drawGT3(e){
   const x=e.x|0,y=e.y|0,w=e.w,h=e.h;
-  // Wings (flying)
   const wingFlap=Math.sin(tick*.18)*8;
   ctx.fillStyle='rgba(200,230,255,.5)';
   ctx.fillRect(x-12,y+h*.3+wingFlap,12,8);ctx.fillRect(x+w,y+h*.3-wingFlap,12,8);
-  // Book body — off-white
   ctx.fillStyle='#e8e8dc';ctx.fillRect(x,y,w,h);
-  ctx.fillStyle='#ccccbc';ctx.fillRect(x,y,3,h); // spine
-  ctx.fillStyle='#aaaaaa';ctx.fillRect(x,y,w,3); // top
-  // Color band at bottom (like GT3 cover — teal/brown)
+  ctx.fillStyle='#ccccbc';ctx.fillRect(x,y,3,h);
+  ctx.fillStyle='#aaaaaa';ctx.fillRect(x,y,w,3);
   ctx.fillStyle='#2a6a5a';ctx.fillRect(x,y+h*.7,w,h*.3);
-  // "III" text
   ctx.fillStyle='#1a1a3a';ctx.font='bold 5px monospace';ctx.textAlign='center';
   ctx.fillText('GIẢI',x+w/2,y+10);ctx.fillText('TÍCH',x+w/2,y+16);
   ctx.fillStyle='#c8001e';ctx.fillText('III',x+w/2,y+23);ctx.textAlign='left';
-  // Pixel rabbit ear tips (from GT3 cover)
   ctx.fillStyle='#888';ctx.fillRect(x+5,y+h*.45,4,7);ctx.fillRect(x+w-9,y+h*.45,4,7);
-  // Face
   ctx.fillStyle='#fff';ctx.fillRect(x+3,y+h*.55,6,5);ctx.fillRect(x+w-9,y+h*.55,6,5);
   ctx.fillStyle='#000';ctx.fillRect(x+4,y+h*.57,3,3);ctx.fillRect(x+w-8,y+h*.57,3,3);
-  ctx.fillStyle='#ff88aa';ctx.fillRect(x+w/2-2,y+h*.63,5,2);// mouth
+  ctx.fillStyle='#ff88aa';ctx.fillRect(x+w/2-2,y+h*.63,5,2);
 }
 
-// VL: Vật Lý Đại Cương — light blue book, jumps periodically
 function drawVL(e){
   const x=e.x|0,y=e.y|0,w=e.w,h=e.h;
-  // Shadow when airborne
-  if(e.y<e.sinBase-2){
-    ctx.fillStyle='rgba(0,0,0,.2)';
-    ctx.fillRect(x+2,e.sinBase+e.h-2,w-4,4);
-  }
-  // Book body — light blue like Vật Lý ĐC cover
+  if(e.y<e.sinBase-2){ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(x+2,e.sinBase+e.h-2,w-4,4);}
   ctx.fillStyle='#b8d8e8';ctx.fillRect(x,y,w,h);
   ctx.fillStyle='#a0c8dc';ctx.fillRect(x,y,3,h);
   ctx.fillStyle='#88b8cc';ctx.fillRect(x,y,w,3);
-  // Green stripe bands (characteristic of the book)
-  ctx.fillStyle='#2a8a4a';
-  ctx.fillRect(x,y+h*.4,w,5);ctx.fillRect(x,y+h*.5,w,3);ctx.fillRect(x,y+h*.6,w,5);
-  // White circle with text "CƠ" (Cơ-Nhiệt)
+  ctx.fillStyle='#2a8a4a';ctx.fillRect(x,y+h*.4,w,5);ctx.fillRect(x,y+h*.5,w,3);ctx.fillRect(x,y+h*.6,w,5);
   ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x+w/2,y+h*.52,6,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#1a5a3a';ctx.font='bold 4px monospace';ctx.textAlign='center';
   ctx.fillText('CƠ',x+w/2,y+h*.54);ctx.textAlign='left';
-  // Title
   ctx.fillStyle='#8b1a1a';ctx.font='bold 4px monospace';ctx.textAlign='center';
   ctx.fillText('VẬT LÝ',x+w/2,y+10);ctx.fillText('ĐẠI',x+w/2,y+16);ctx.fillText('CƯƠNG',x+w/2,y+22);ctx.textAlign='left';
-  // Face
   ctx.fillStyle='#fff';ctx.fillRect(x+3,y+h*.66,6,5);ctx.fillRect(x+w-9,y+h*.66,6,5);
   ctx.fillStyle='#000';ctx.fillRect(x+4,y+h*.68,3,3);ctx.fillRect(x+w-8,y+h*.68,3,3);
-  // shock brows (physics = shocking)
   ctx.fillStyle='#000';ctx.fillRect(x+3,y+h*.63,7,2);ctx.fillRect(x+w-10,y+h*.63,7,2);
   ctx.fillStyle='#c8001e';ctx.fillRect(x+6,y+h*.76,w-12,3);
-  // Lightning bolt when jumping
-  if(e.y<e.sinBase-10){
-    ctx.fillStyle='#ffd700';ctx.font='bold 8px serif';ctx.textAlign='center';
-    ctx.fillText('⚡',x+w/2,y-2);ctx.textAlign='left';
-  }
+  if(e.y<e.sinBase-10){ctx.fillStyle='#ffd700';ctx.font='bold 8px serif';ctx.textAlign='center';ctx.fillText('⚡',x+w/2,y-2);ctx.textAlign='left';}
 }
 
-// DL: Deadline (original boss monster, fast, red/dark)
 function drawDL(e){
   const x=e.x|0,y=e.y|0,w=e.w,h=e.h;
   const lf=e.fr===0;
@@ -677,21 +596,11 @@ function drawDL(e){
   ctx.fillStyle='#2a0000';ctx.fillRect(x+(lf?2:6),y+h-5,8,5);ctx.fillRect(x+(lf?w-10:w-6),y+h-5,8,5);
   ctx.fillStyle=`rgba(180,0,0,${pulse})`;ctx.fillRect(x,y,w,h-4);
   ctx.fillStyle='#500';ctx.fillRect(x,y,w,5);
-  // skull-ish face
   ctx.fillStyle='#fff';ctx.fillRect(x+3,y+4,8,8);ctx.fillRect(x+w-11,y+4,8,8);
   ctx.fillStyle='#000';ctx.fillRect(x+4,y+5,4,6);ctx.fillRect(x+w-10,y+5,4,6);
-  ctx.fillStyle='rgba(255,255,255,.5)';ctx.fillRect(x+5,y+5,2,2);ctx.fillRect(x+w-9,y+5,2,2);
-  ctx.fillStyle='#000';
-  ctx.save();ctx.translate(x+4,y+2);ctx.rotate(-.4);ctx.fillRect(0,0,9,2);ctx.restore();
-  ctx.save();ctx.translate(x+w-4,y+2);ctx.rotate(.4);ctx.fillRect(-9,0,9,2);ctx.restore();
-  // DEADLINE label
   ctx.fillStyle='#ffd700';ctx.font='bold 4px monospace';ctx.textAlign='center';
   ctx.fillText('DEAD',x+w/2,y+h*.6);ctx.fillText('LINE',x+w/2,y+h*.73);ctx.textAlign='left';
-  // flame at top when fast
-  if(Math.abs(e.vx)>2.5){
-    ctx.fillStyle='rgba(255,100,0,.7)';ctx.font='10px serif';ctx.textAlign='center';
-    ctx.fillText('🔥',x+w/2,y-2);ctx.textAlign='left';
-  }
+  if(Math.abs(e.vx)>2.5){ctx.fillStyle='rgba(255,100,0,.7)';ctx.font='10px serif';ctx.textAlign='center';ctx.fillText('🔥',x+w/2,y-2);ctx.textAlign='left';}
 }
 
 function drawEnemy(e){
@@ -706,13 +615,12 @@ function drawEnemy(e){
 }
 
 // ══════════════════════════════════════
-// DRAW — BACKGROUND BUILDINGS (C1 + TQB)
+// DRAW — BACKGROUND
 // ══════════════════════════════════════
 let _scIdx=0;
 function drawBackground(scIdx,sc){
   _scIdx=scIdx;
   const far=cam*.06,mid=cam*.12;
-  // far hills
   ctx.save();ctx.translate(-(far|0),0);
   for(let rep=-1;rep<3;rep++){
     const ox=rep*VW;
@@ -725,7 +633,6 @@ function drawBackground(scIdx,sc){
     }
   }
   ctx.restore();
-  // mid buildings
   ctx.save();ctx.translate(-(mid|0),0);
   for(let rep=-1;rep<3;rep++){
     const ox=rep*VW;const alpha=scIdx>=3?0.75:0.55;
@@ -735,267 +642,117 @@ function drawBackground(scIdx,sc){
     else{drawC7(ox+30,GY,.82);drawC7(ox+160,GY,.72);drawC7(ox+290,GY,.88);}
   }
   ctx.restore();
-  // bushes
   ctx.save();ctx.translate(-(cam*.22|0),0);
   for(let rep=-1;rep<4;rep++){const ox=rep*VW;for(let i=0;i<5;i++){const bx=ox+i*85+25,r=12+i%3*6;const col=scIdx>=3?'rgba(0,10,0,.95)':'rgba(20,80,20,.75)';ctx.fillStyle=col;ctx.beginPath();ctx.arc(bx,GY,r,Math.PI,0);ctx.fill();ctx.beginPath();ctx.arc(bx+r*.6,GY,r*.65,Math.PI,0);ctx.fill();ctx.beginPath();ctx.arc(bx-r*.55,GY,r*.65,Math.PI,0);ctx.fill();}}
   ctx.restore();
 }
 
 function drawC1(ox,oy,alpha){
-  ctx.globalAlpha=alpha;
-  const w=90,h=68,x=ox,y=oy-h;
+  ctx.globalAlpha=alpha;const w=90,h=68,x=ox,y=oy-h;
   ctx.fillStyle='#d0d0c8';ctx.fillRect(x,y,w,h);
   ctx.fillStyle='#c0c0b8';ctx.fillRect(x-22,y+22,21,h-22);ctx.fillRect(x+w+1,y+22,18,h-22);
-  ctx.fillStyle='#aaa8a0';ctx.fillRect(x-2,y-3,w+4,5);ctx.fillRect(x-23,y+20,w+43,3);
-  // Lattice grid
   ctx.fillStyle='rgba(30,30,30,.55)';
   for(let r=0;r<7;r++)for(let c=0;c<9;c++)ctx.fillRect(x+6+c*9,y+6+r*8,6,5);
-  // Red BK banner
   ctx.fillStyle='#c8001e';ctx.fillRect(x+w-17,y+12,17,22);
   ctx.fillStyle='#fff';ctx.font='bold 5px monospace';ctx.textAlign='center';
   ctx.fillText('BK',x+w-8,y+20);ctx.fillText('BACH',x+w-8,y+26);ctx.fillText('KHOA',x+w-8,y+32);ctx.textAlign='left';
-  // Flag
-  ctx.fillStyle='#888';ctx.fillRect(x+w/2-1,y-18,2,18);
-  ctx.fillStyle='#c8001e';ctx.fillRect(x+w/2+1,y-16,12,7);
-  ctx.fillStyle='#ffd700';ctx.font='5px serif';ctx.fillText('★',x+w/2+3,y-10);
-  // Steps
-  ctx.fillStyle='#b0b0a8';ctx.fillRect(x+w/2-18,oy-3,36,3);ctx.fillRect(x+w/2-14,oy-7,28,4);ctx.fillRect(x+w/2-10,oy-11,20,4);
-  // I♥BK sign
-  ctx.fillStyle='#e8e8e0';ctx.fillRect(x+w/2-11,oy-22,22,13);
-  ctx.fillStyle='#222';ctx.font='bold 6px monospace';ctx.textAlign='center';
-  ctx.fillText('I',x+w/2-4,oy-12);ctx.fillStyle='#c8001e';ctx.fillText('♥',x+w/2+1,oy-12);
-  ctx.fillStyle='#222';ctx.fillText('BK',x+w/2+6,oy-12);ctx.textAlign='left';
-  // Trees
-  drawTree(x-30,oy,_scIdx);drawTree(x+w+10,oy,_scIdx);drawTree(x-50,oy,_scIdx);
+  drawTree(x-30,oy,_scIdx);drawTree(x+w+10,oy,_scIdx);
   ctx.globalAlpha=1;
 }
 function drawC1Night(ox,oy,alpha){
-  ctx.globalAlpha=alpha;
-  const w=90,h=68,x=ox,y=oy-h;
+  ctx.globalAlpha=alpha;const w=90,h=68,x=ox,y=oy-h;
   ctx.fillStyle='#080808';ctx.fillRect(x,y,w,h);
-  ctx.fillStyle='#040404';ctx.fillRect(x-22,y+22,21,h-22);ctx.fillRect(x+w+1,y+22,18,h-22);
-  // Lit windows
-  for(let r=0;r<7;r++)for(let c=0;c<9;c++){
-    if(Math.random()>.5||(r*9+c)%4===0){ctx.fillStyle='rgba(255,220,120,.45)';ctx.fillRect(x+6+c*9,y+6+r*8,6,5);}
-  }
-  ctx.fillStyle='#c8001e';ctx.fillRect(x+w-17,y+12,17,22);
-  ctx.fillStyle='rgba(255,220,50,.15)';ctx.fillRect(x+w/2-1,y-18,2,18);
+  for(let r=0;r<7;r++)for(let c=0;c<9;c++)if(Math.random()>.5){ctx.fillStyle='rgba(255,220,120,.45)';ctx.fillRect(x+6+c*9,y+6+r*8,6,5);}
   ctx.globalAlpha=1;
 }
 function drawTQB(ox,oy,alpha){
-  ctx.globalAlpha=alpha;
-  const w=68,h=108,x=ox,y=oy-h;
+  ctx.globalAlpha=alpha;const w=68,h=108,x=ox,y=oy-h;
   ctx.fillStyle='#c8c8c0';ctx.fillRect(x,y,w,h);
-  // Floor bands + windows
-  ctx.fillStyle='#b0b0a8';
   for(let fl=0;fl<8;fl++){
-    const fy=y+fl*(h/9);ctx.fillRect(x,fy,w,2);
-    ctx.fillStyle='rgba(100,160,220,.38)';
-    for(let wn=0;wn<4;wn++)ctx.fillRect(x+4+wn*15,fy+3,11,7);
-    ctx.fillStyle='#b0b0a8';
+    const fy=y+fl*(h/9);ctx.fillStyle='#b0b0a8';ctx.fillRect(x,fy,w,2);
+    ctx.fillStyle='rgba(100,160,220,.38)';for(let wn=0;wn<4;wn++)ctx.fillRect(x+4+wn*15,fy+3,11,7);
   }
-  ctx.fillStyle='#1a3a6e';ctx.fillRect(x,y+h*.28,w,5);ctx.fillRect(x,y+h*.56,w,4);
-  // Clock
   const clkX=x+w/2,clkY=y+h*.42;
   ctx.fillStyle='#111';ctx.beginPath();ctx.arc(clkX,clkY,12,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#f0f0e8';ctx.beginPath();ctx.arc(clkX,clkY,10,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#333';for(let m=0;m<12;m++){const a=m/12*Math.PI*2;ctx.fillRect(clkX+Math.cos(a)*8-1,clkY+Math.sin(a)*8-1,2,2);}
-  ctx.strokeStyle='#111';ctx.lineWidth=1.5;
-  const hr=(gameSec/60)*Math.PI*2;ctx.beginPath();ctx.moveTo(clkX,clkY);ctx.lineTo(clkX+Math.cos(hr-Math.PI/2)*5,clkY+Math.sin(hr-Math.PI/2)*5);ctx.stroke();
-  ctx.lineWidth=1;const mn=(gameSec/5)*Math.PI*2;ctx.beginPath();ctx.moveTo(clkX,clkY);ctx.lineTo(clkX+Math.cos(mn-Math.PI/2)*7,clkY+Math.sin(mn-Math.PI/2)*7);ctx.stroke();
-  // Arch entrance
-  ctx.fillStyle='#1a3a6e';ctx.fillRect(x+w/2-12,oy-12,24,12);
-  ctx.fillStyle='#bbb';ctx.beginPath();ctx.moveTo(x+w/2-13,oy-12);ctx.quadraticCurveTo(x+w/2,oy-22,x+w/2+13,oy-12);ctx.lineTo(x+w/2+11,oy-12);ctx.quadraticCurveTo(x+w/2,oy-20,x+w/2-11,oy-12);ctx.closePath();ctx.fill();
-  ctx.fillStyle='#aaa';ctx.fillRect(x-2,y-3,w+4,5);
-  ctx.fillStyle='#888';ctx.fillRect(x+w/2-1,y-14,2,14);
-  // Palm trees
-  drawPalm(x-14,oy,_scIdx);drawPalm(x+w+8,oy,_scIdx);
   ctx.globalAlpha=1;
 }
 function drawTQBNight(ox,oy,alpha){
-  ctx.globalAlpha=alpha;
-  const w=68,h=108,x=ox,y=oy-h;
+  ctx.globalAlpha=alpha;const w=68,h=108,x=ox,y=oy-h;
   ctx.fillStyle='#050510';ctx.fillRect(x,y,w,h);
-  ctx.fillStyle='#1a3a6e';ctx.fillRect(x,y+h*.28,w,5);ctx.fillRect(x,y+h*.56,w,4);
-  // Lit windows with variety
-  for(let fl=0;fl<8;fl++){
-    for(let wn=0;wn<4;wn++){
-      if(Math.random()>.3||(fl*4+wn)%3===0){
-        ctx.fillStyle=Math.random()>.5?'rgba(255,220,120,.55)':'rgba(120,180,255,.35)';
-        ctx.fillRect(x+4+wn*15,y+fl*(h/9)+3,11,7);
-      }
-    }
-  }
-  const clkX=x+w/2,clkY=y+h*.42;
-  ctx.fillStyle='#2a2a20';ctx.beginPath();ctx.arc(clkX,clkY,12,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='rgba(200,220,150,.4)';ctx.beginPath();ctx.arc(clkX,clkY,10,0,Math.PI*2);ctx.fill();
+  for(let fl=0;fl<8;fl++)for(let wn=0;wn<4;wn++)if(Math.random()>.3){ctx.fillStyle='rgba(255,220,120,.55)';ctx.fillRect(x+4+wn*15,y+fl*(h/9)+3,11,7);}
   ctx.globalAlpha=1;
 }
 function drawC7(ox,oy,alpha){
   ctx.globalAlpha=alpha;const x=ox,bw=36,h=130;
   ctx.fillStyle='rgba(20,10,40,.85)';
   ctx.beginPath();ctx.moveTo(x,oy);ctx.lineTo(x+bw,oy);ctx.lineTo(x+bw*.7,oy-h);ctx.lineTo(x+bw*.3,oy-h);ctx.closePath();ctx.fill();
-  ctx.fillStyle='rgba(120,0,255,.25)';
-  for(let i=0;i<6;i++){ctx.fillRect(x+bw*.3,oy-20-i*18,bw*.4,10);}
-  ctx.fillStyle='#555';ctx.fillRect(x+bw*.45,oy-h-16,3,18);
-  const beacon=0.4+0.6*Math.abs(Math.sin(tick*.08));
-  ctx.fillStyle='rgba(180,0,255,'+beacon+')';ctx.beginPath();ctx.arc(x+bw*.47+1,oy-h-16,3,0,Math.PI*2);ctx.fill();
   ctx.globalAlpha=1;
 }
 function drawParabol(ox,oy,alpha){
   ctx.globalAlpha=alpha;const x=ox;
-  ctx.fillStyle='rgba(40,40,40,.82)';ctx.fillRect(x,oy-52,10,52);ctx.fillRect(x+48,oy-52,10,52);
   ctx.strokeStyle='rgba(40,40,40,.82)';ctx.lineWidth=8;
   ctx.beginPath();ctx.moveTo(x+5,oy-52);ctx.quadraticCurveTo(x+34,oy-88,x+53,oy-52);ctx.stroke();
-  ctx.fillStyle='rgba(255,215,0,.6)';ctx.font='8px serif';ctx.fillText('★',x+28,oy-70);ctx.globalAlpha=1;
+  ctx.globalAlpha=1;
 }
 function drawTree(x,y,si){
   const dark=si>=3;
   ctx.fillStyle=dark?'rgba(15,8,4,.9)':'rgba(55,28,8,.8)';ctx.fillRect(x-2,y-26,4,26);
-  const gc=dark?'rgba(5,12,5,.95)':'rgba(25,90,25,.78)';
-  const gc2=dark?'rgba(8,18,8,.9)':'rgba(35,110,35,.72)';
-  ctx.fillStyle=gc2;ctx.fillRect(x-9,y-44,18,13);ctx.fillStyle=gc;ctx.fillRect(x-7,y-53,14,11);ctx.fillRect(x-4,y-60,9,9);
-  if(si===0){ctx.fillStyle='rgba(180,140,20,.38)';ctx.fillRect(x-9,y-44,18,13);}
-  if(si===2){ctx.fillStyle='rgba(200,75,0,.42)';ctx.fillRect(x-9,y-44,18,13);ctx.fillRect(x-7,y-53,14,11);}
-}
-function drawPalm(x,y,si){
-  const dark=si>=3;
-  ctx.fillStyle=dark?'rgba(15,8,4,.9)':'rgba(48,28,8,.82)';ctx.fillRect(x-2,y-38,4,38);
-  ctx.strokeStyle=dark?'rgba(10,18,10,.9)':'rgba(15,65,15,.8)';ctx.lineWidth=3;
-  const fronds=[[-17,-9],[-13,8],[0,-13],[13,8],[17,-9]];
-  for(const[dx,dy]of fronds){ctx.beginPath();ctx.moveTo(x,y-38);ctx.quadraticCurveTo(x+dx*.5,y-38+dy*.3,x+dx,y-38+dy);ctx.stroke();}
-  ctx.lineWidth=1;
+  ctx.fillStyle=dark?'rgba(5,12,5,.95)':'rgba(25,90,25,.78)';
+  ctx.fillRect(x-9,y-44,18,13);
 }
 
 // ══════════════════════════════════════
-// DRAW — TILES + COLLECTIBLES
+// TILES + PLAYER
 // ══════════════════════════════════════
 function drawChunk(ch,sc){
   if(ch.x+CHUNK<cam-20||ch.x>cam+VW+20)return;
-
-  // Visible x range in world-space — clamp tile loops to avoid drawing off-screen
   const vLeft=cam-16, vRight=cam+VW+16;
-
   for(const g of ch.grounds){
-    // Start tile loop from the first visible tile, not g.x
-    const startTx=Math.max(g.x, (vLeft&~15));     // align to 16px grid
+    const startTx=Math.max(g.x, (vLeft&~15));
     for(let tx=startTx;tx<g.x+g.w&&tx<vRight;tx+=16){
-      const tw=Math.min(16,g.x+g.w-tx);
-      ctx.fillStyle=sc.groundTop;ctx.fillRect(tx,g.y,tw,16);
-      ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(tx+1,g.y+1,5,2);ctx.fillRect(tx+1,g.y+1,2,5);
-      ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(tx+9,g.y+4,4,4);ctx.fillRect(tx+2,g.y+10,5,4);
-      ctx.fillStyle=sc.groundFill;ctx.fillRect(tx,g.y+16,tw,32);
+      ctx.fillStyle=sc.groundTop;ctx.fillRect(tx,g.y,16,16);
+      ctx.fillStyle=sc.groundFill;ctx.fillRect(tx,g.y+16,16,32);
     }
   }
   for(const p of ch.platfs){
     const startTx=Math.max(p.x, (vLeft&~15));
     for(let tx=startTx;tx<p.x+p.w&&tx<vRight;tx+=16){
-      const tw=Math.min(16,p.x+p.w-tx);
-      ctx.fillStyle='#8b5e14';ctx.fillRect(tx,p.y,tw,12);ctx.fillStyle='#6b4410';ctx.fillRect(tx,p.y+6,tw,1);
-      ctx.fillRect(tx+(((tx-p.x)/16|0)%2?7:0),p.y,1,12);ctx.fillStyle='rgba(255,255,255,.1)';ctx.fillRect(tx+1,p.y+1,5,2);
+      ctx.fillStyle='#8b5e14';ctx.fillRect(tx,p.y,16,12);
     }
   }
   for(const qb of ch.qbs){
-    if(qb.x+qb.w<vLeft||qb.x>vRight)continue; // frustum cull
     const by=(qb.y-qb.bump)|0;
-    if(qb.hit){ctx.fillStyle='#6b4410';ctx.fillRect(qb.x,by,qb.w,qb.h);ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(qb.x+2,by+4,qb.w-4,qb.h-6);}
+    if(qb.hit){ctx.fillStyle='#6b4410';ctx.fillRect(qb.x,by,qb.w,qb.h);}
     else{
-      const pulse=.5+.5*Math.sin(tick*.22);
-      ctx.fillStyle='#fbd000';ctx.fillRect(qb.x,by,qb.w,qb.h);ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(qb.x+1,by+1,qb.w-2,3);
-      ctx.fillStyle='#000';ctx.fillRect(qb.x,by,qb.w,1);ctx.fillRect(qb.x,by+qb.h-1,qb.w,1);
-      ctx.fillStyle='rgba(200,0,20,'+(0.7+pulse*.3)+')';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText('?',qb.x+qb.w/2,by+11);ctx.textAlign='left';
+      ctx.fillStyle='#fbd000';ctx.fillRect(qb.x,by,qb.w,qb.h);
+      ctx.fillStyle='#000';ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText('?',qb.x+qb.w/2,by+11);ctx.textAlign='left';
     }
   }
-  // Frustum-cull each enemy/book/coin before drawing
   for(const e of ch.enemies)if(e.alive&&e.x+e.w>vLeft&&e.x<vRight)drawEnemy(e);
   for(const b of ch.books){
     if(b.done||b.x+14<vLeft||b.x>vRight)continue;
-    const by2=(b.y+Math.sin(tick*.15+b.x*.01)*2.5)|0;
-    ctx.fillStyle='#c8001e';ctx.fillRect(b.x,by2,14,18);ctx.fillStyle='#800010';ctx.fillRect(b.x,by2,3,18);
-    ctx.fillStyle='#f5f5f0';ctx.fillRect(b.x+3,by2+2,10,14);ctx.fillStyle='#ccc';[4,7,10].forEach(l=>ctx.fillRect(b.x+4,by2+l,7,1));
-    ctx.fillStyle='#fbd000';ctx.font='8px serif';ctx.fillText('★',b.x+3,by2-1);
+    ctx.fillStyle='#c8001e';ctx.fillRect(b.x,b.y,14,18);
   }
   for(const co of ch.coins){
     if(co.done||co.x+10<vLeft||co.x>vRight)continue;
-    const sq=Math.abs(Math.sin(tick*.15+co.x*.04)),cw=Math.max(2,(8*sq)|0);
-    ctx.fillStyle='#fbd000';ctx.fillRect((co.x+4-cw/2)|0,(co.y+co.bob)|0,cw,12);
-    ctx.fillStyle='#ffe566';ctx.fillRect((co.x+4-cw/2)|0,(co.y+co.bob)|0+1,Math.max(1,cw-2),3);
+    ctx.fillStyle='#fbd000';ctx.fillRect(co.x,co.y+co.bob,8,12);
   }
 }
 
-// ══════════════════════════════════════
-// DRAW — PLAYER
-// ══════════════════════════════════════
 function drawPlayer(){
   if(G.inv&&Math.floor(tick/5)%2===0)return;
   const x=G.x|0,y=G.y|0,w=G.w;
-  ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(x+1,GY-1,w-2,4);
-  const ll=G.fr%2===0?2:0,lr=G.fr%2===0?0:2;
-  ctx.fillStyle='#001a50';ctx.fillRect(x+2,y+22,5,8+ll);ctx.fillRect(x+7,y+22,5,8+lr);
-  ctx.fillStyle='#5a2800';ctx.fillRect(x,y+28+ll,8,5);ctx.fillRect(x+6,y+28+lr,9,5);
-  ctx.fillStyle='rgba(255,255,255,.2)';ctx.fillRect(x+1,y+29+ll,3,2);ctx.fillRect(x+7,y+29+lr,3,2);
-  ctx.fillStyle='#3a1500';ctx.fillRect(x,y+32+ll,8,1);ctx.fillRect(x+6,y+32+lr,9,1);
-  ctx.fillStyle='#c8001e';ctx.fillRect(x+1,y+13,w-2,11);
-  ctx.fillStyle='#fff';ctx.fillRect(x+4,y+13,w-8,3);
-  ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(x+1,y+22,w-2,2);
-  ctx.fillStyle='rgba(255,255,255,.15)';ctx.fillRect(x+2,y+14,5,3);
-  ctx.fillStyle='#fbd000';ctx.font='bold 4px monospace';ctx.textAlign='center';ctx.fillText('HUST',x+w/2,y+21);ctx.textAlign='left';
-  const as=(Math.sin(tick*.32)*2.5)|0;
-  ctx.fillStyle='#c8001e';ctx.fillRect(x-3,y+14+as,4,8);ctx.fillRect(x+w-1,y+14-as,4,8);
-  ctx.fillStyle='#f0c090';ctx.fillRect(x-3,y+21+as,4,4);ctx.fillRect(x+w-1,y+21-as,4,4);
-  ctx.fillStyle='#f0c090';ctx.fillRect(x+1,y+2,w-2,12);ctx.fillRect(x,y+5,2,6);ctx.fillRect(x+w-2,y+5,2,6);
-  ctx.fillStyle='#d8a878';ctx.fillRect(x,y+8,2,2);ctx.fillRect(x+w-2,y+8,2,2);
-  ctx.fillStyle='#3b1a08';ctx.fillRect(x+1,y+2,w-2,5);ctx.fillRect(x+1,y+2,3,8);
-  ctx.fillStyle='#001a60';ctx.fillRect(x,y-3,w,7);ctx.fillStyle='#c8001e';ctx.fillRect(x+1,y+2,w-2,2);
-  ctx.fillStyle='#001a60';ctx.fillRect(x-2,y+3,w+4,3);ctx.fillStyle='rgba(0,0,0,.3)';ctx.fillRect(x-2,y+5,w+4,1);
-  ctx.fillStyle='#c8001e';ctx.fillRect(x+w/2-1,y-5,2,3);
-  ctx.fillStyle='#fbd000';ctx.font='4px monospace';ctx.textAlign='center';ctx.fillText('BK',x+w/2,y+1);ctx.textAlign='left';
+  ctx.fillStyle='#c8001e';ctx.fillRect(x,y+13,w,11);
+  ctx.fillStyle='#f0c090';ctx.fillRect(x+1,y+2,w-2,12);
+  ctx.fillStyle='#001a60';ctx.fillRect(x-2,y+3,w+4,3);
   ctx.fillStyle='#111';ctx.fillRect(x+3,y+7,3,3);ctx.fillRect(x+w-6,y+7,3,3);
-  ctx.fillStyle='#fff';ctx.fillRect(x+4,y+7,1,1);ctx.fillRect(x+w-5,y+7,1,1);
-  ctx.fillStyle='#c07840';ctx.fillRect(x+w/2-1,y+9,2,2);
-  ctx.fillStyle='#3b1a08';ctx.fillRect(x+2,y+11,w-4,3);ctx.fillRect(x+2,y+12,2,3);ctx.fillRect(x+w-4,y+12,2,3);
-  ctx.fillStyle='#804020';ctx.fillRect(x+5,y+13,4,1);
 }
 
-// ══════════════════════════════════════
-// MAIN DRAW
-// ══════════════════════════════════════
 function draw(){
   const scIdx=getSceneIdx(G.dist||0);const sc=SCENES[scIdx];
   const g=ctx.createLinearGradient(0,0,0,VH);for(const[s,c]of sc.sky)g.addColorStop(s,c);
   ctx.fillStyle=g;ctx.fillRect(0,0,VW,VH);
-  // stars / celestial
-  if(scIdx>=3){
-    for(let i=0;i<90;i++){
-      const sx=((i*137+tick*.08)%(VW+20))-10,sy=(i*89+Math.sin(i*.7)*15)%110;
-      const bright=0.4+0.6*Math.abs(Math.sin(tick*.04+i));
-      ctx.globalAlpha=bright*(scIdx===4?1:.65);ctx.fillStyle='#fff';ctx.fillRect(sx,sy,i%4===0?1.5:.7,i%4===0?1.5:.7);
-    }
-    if(scIdx===4){ctx.globalAlpha=.06;ctx.fillStyle='#aa00ff';ctx.beginPath();ctx.arc(VW*.65-cam*.015,50,45,0,Math.PI*2);ctx.fill();}
-    ctx.globalAlpha=1;
-    const mx=(VW*.3-cam*.015+VW*2)%VW;
-    ctx.fillStyle='#e8e8cc';ctx.beginPath();ctx.arc(mx,28,10,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle=scIdx===4?'rgba(10,0,30,.95)':'rgba(10,8,28,.95)';ctx.beginPath();ctx.arc(mx+4,26,9,0,Math.PI*2);ctx.fill();
-  } else if(scIdx===0){
-    const sx=(VW*.75-cam*.025+VW*2)%VW;
-    ctx.fillStyle='#ff9500';ctx.beginPath();ctx.arc(sx,VH*.5,13,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='rgba(255,149,0,.2)';ctx.beginPath();ctx.arc(sx,VH*.5,22,0,Math.PI*2);ctx.fill();
-  } else if(scIdx===1){
-    const sx=(VW*.8-cam*.02+VW*2)%VW;
-    ctx.fillStyle='#fffde7';ctx.beginPath();ctx.arc(sx,VH*.12,10,0,Math.PI*2);ctx.fill();
-  } else if(scIdx===2){
-    const sx=(VW*.7-cam*.02+VW*2)%VW;
-    ctx.fillStyle='#ff4400';ctx.beginPath();ctx.arc(sx,VH*.58,15,0,Math.PI*2);ctx.fill();
-    ctx.fillStyle='rgba(255,100,0,.16)';ctx.beginPath();ctx.arc(sx,VH*.58,28,0,Math.PI*2);ctx.fill();
-  }
-  // clouds
-  ctx.fillStyle=sc.cloudCol;
-  for(let i=0;i<7;i++){
-    const x=((i*108+65-cam*.15)%(VW+160))-40,y=14+i%3*8,s=.8+i%3*.2;
-    ctx.globalAlpha=sc.cloudAlpha*(0.7+0.3*Math.sin(tick*.008+i));
-    ctx.fillRect((x+5*s)|0,(y+5*s)|0,(22*s)|0,(7*s)|0);ctx.fillRect((x+1*s)|0,(y+2*s)|0,(30*s)|0,(8*s)|0);ctx.fillRect((x+6*s)|0,y-1,(16*s)|0,(5*s)|0);
-  }
-  ctx.globalAlpha=1;
   drawBackground(scIdx,sc);
   ctx.save();ctx.translate(-(cam|0),0);
   for(const ch of chunks)drawChunk(ch,sc);
@@ -1004,26 +761,18 @@ function draw(){
   ctx.restore();
 }
 
-// ══════════════════════════════════════
-// LOOP / START / INPUT
-// ══════════════════════════════════════
 let looping=false;
 function loop(ts){if(!looping)return;update(ts);draw();requestAnimationFrame(loop);}
 function startGame(){
   document.getElementById('title').style.display='none';
-  // Cache all DOM refs once — avoids repeated getElementById on every frame
-  cacheDOM();
-  $.endscreen.style.display='none';
+  cacheDOM();$.endscreen.style.display='none';
   running=true;initGame();
   if(!looping){looping=true;requestAnimationFrame(loop);}
 }
 document.getElementById('startbtn').addEventListener('click',startGame);
 document.getElementById('replaybtn').addEventListener('click',()=>{$.endscreen.style.display='none';running=true;initGame();});
-document.addEventListener('keydown',e=>{
-  if(e.key===' '||e.key==='ArrowUp'||e.key==='w'||e.key==='W'){e.preventDefault();if(running&&!qaActive&&!G.dead)wantsJump=true;}
-});
+document.addEventListener('keydown',e=>{if(e.key===' '||e.key==='ArrowUp'){e.preventDefault();if(running&&!qaActive&&!G.dead)wantsJump=true;}});
 cv.addEventListener('pointerdown',e=>{e.preventDefault();if(running&&!qaActive&&!G.dead)wantsJump=true;},{passive:false});
-document.getElementById('jbtn').addEventListener('pointerdown',e=>{e.stopPropagation();e.preventDefault();if(running&&!qaActive&&!G.dead)wantsJump=true;},{passive:false});
 </script>
 </body>
 </html>
